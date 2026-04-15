@@ -2,6 +2,8 @@
 
 Kiroro 是 [Kiro](https://kiro.dev) 的智能小助手 Bot，帮助用户解决 Kiro 使用过程中遇到的各种问题。
 
+<img src="assets/dingtalk-demo.jpg" width="400" alt="Kiroro 在钉钉群聊中回答问题">
+
 ## Connectors
 
 | 目录 | 平台 | 接入方式 | 部署方式 | 部署文档 |
