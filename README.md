@@ -2,6 +2,13 @@
 
 Kiroro 是 [Kiro](https://kiro.dev) 的智能小助手 Bot，帮助用户解决 Kiro 使用过程中遇到的各种问题。
 
+## Connectors
+
+| 目录 | 平台 | 接入方式 | 部署方式 | 部署文档 |
+|------|------|----------|----------|----------|
+| [dingtalk/](dingtalk/) | 钉钉 | Stream (WebSocket 长连接) | AWS ECS Fargate (CDK) | [README](dingtalk/README.md) |
+| [wecom/](wecom/) | 企业微信 | HTTP 回调 + SQS 异步 | AWS Lambda (SAM) | [README](wecom/README.md) |
+
 ## 功能
 
 - 🤖 通过 IM 平台（钉钉、企业微信）直接与 Kiroro 对话
@@ -22,13 +29,6 @@ Kiroro 是 [Kiro](https://kiro.dev) 的智能小助手 Bot，帮助用户解决 
             ↓
          用户收到回答
 ```
-
-## Connectors
-
-| 目录 | 平台 | 接入方式 | 部署方式 |
-|------|------|----------|----------|
-| [dingtalk/](dingtalk/) | 钉钉 | Stream (WebSocket 长连接) | AWS ECS Fargate (CDK) |
-| [wecom/](wecom/) | 企业微信 | HTTP 回调 + SQS 异步 | AWS Lambda (SAM) |
 
 ## Kiro Chatbot REST API
 
@@ -81,17 +81,10 @@ Content-Type: application/json
 
 API 超时已提高到 299 秒（非 CN 区）。建议客户端超时设为 200 秒以上。
 
-## 部署文档
-
-| Connector | 部署文档 | 部署方式 |
-|-----------|----------|----------|
-| 钉钉 | [dingtalk/README.md](dingtalk/README.md) | AWS ECS Fargate (CDK) |
-| 企业微信 | [wecom/README.md](wecom/README.md) | AWS Lambda (SAM) |
-
 ## 项目结构
 
 ```
-kiroro-connectors/
+kiroro/
 ├── dingtalk/                  # 钉钉 connector
 │   ├── connector.py           #   主程序 (Stream 模式)
 │   ├── Dockerfile
