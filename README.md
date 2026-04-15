@@ -99,6 +99,5 @@ kiroro-connectors/
 └── wecom/                     # 企业微信 connector
     ├── deploy/                #   SAM 部署 (Lambda + API GW + SQS + VPC)
     ├── common/                #   企微 SDK 库
-    ├── test/
-    └── .kiro/specs/           #   设计文档
+    └── test/
 ```
