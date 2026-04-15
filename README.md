@@ -23,16 +23,16 @@ Kiroro 是 [Kiro](https://kiro.dev) 的智能小助手 Bot，帮助用户解决 
             ↓
         Connector (消息接收 + 解密)
             ↓
-        Kiro Chatbot REST API (知识库 + LLM 推理)
+        Kiroro REST API (知识库 + LLM 推理)
             ↓
         Connector (格式化 + 回复)
             ↓
          用户收到回答
 ```
 
-## Kiro Chatbot REST API
+## Kiroro REST API
 
-所有 connector 共用同一个 Kiro Chatbot REST API。
+所有 connector 共用同一个 Kiroro REST API。
 
 **Endpoint**
 
