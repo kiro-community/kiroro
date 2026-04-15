@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+dist/
+cdk.out/
+.aws-sam/
+.DS_Store
+temp/
+.kiro/
+cdk.context.json

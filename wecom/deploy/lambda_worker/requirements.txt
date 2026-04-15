@@ -1,0 +1,1 @@
+# worker Lambda 只用 boto3 (Lambda 自带) 和 urllib (标准库)

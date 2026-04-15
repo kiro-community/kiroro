@@ -1,0 +1,11 @@
+.env
+__pycache__/
+*.pyc
+.venv/
+
+# CDK
+infra/node_modules/
+infra/dist/
+infra/cdk.out/
+*.js
+*.d.ts

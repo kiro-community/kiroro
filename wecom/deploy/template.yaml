@@ -1,0 +1,290 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: WeCom callback - API GW + SQS FIFO + Worker Lambda + NAT GW
+
+Parameters:
+  WeComCorpId:
+    Type: String
+  WeComToken:
+    Type: String
+    NoEcho: true
+  WeComEncodingAESKey:
+    Type: String
+    NoEcho: true
+  WeComCorpSecret:
+    Type: String
+    NoEcho: true
+  WeComAgentId:
+    Type: String
+  CertificateArn:
+    Type: String
+    Default: ""
+  CustomDomainName:
+    Type: String
+    Default: wecom.example.com
+
+Conditions:
+  HasCertificate: !Not [!Equals [!Ref CertificateArn, ""]]
+
+Globals:
+  Function:
+    Runtime: python3.12
+    MemorySize: 256
+
+Resources:
+  # ---- VPC + NAT Gateway (固定出口 IP) ----
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: wecom-callback-vpc
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: wecom-public-subnet
+
+  PrivateSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      Tags:
+        - Key: Name
+          Value: wecom-private-subnet
+
+  EIP:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt EIP.AllocationId
+      SubnetId: !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: wecom-nat-gateway
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet
+      RouteTableId: !Ref PrivateRouteTable
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Lambda outbound access
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+
+  # ---- SQS FIFO 队列 ----
+  WeComMessageQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: wecom-messages.fifo
+      FifoQueue: true
+      ContentBasedDeduplication: false
+      VisibilityTimeout: 360
+      MessageRetentionPeriod: 86400
+      ReceiveMessageWaitTimeSeconds: 5
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt WeComDeadLetterQueue.Arn
+        maxReceiveCount: 2
+
+  WeComDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: wecom-messages-dlq.fifo
+      FifoQueue: true
+      MessageRetentionPeriod: 1209600  # 14 天
+
+  # ---- 回调 Lambda (快速返回，只做解密+发SQS) ----
+  WeComCallbackFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda_callback/
+      Handler: app.lambda_handler
+      Timeout: 29
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet
+      Policies:
+        - VPCAccessPolicy: {}
+        - SQSSendMessagePolicy:
+            QueueName: !GetAtt WeComMessageQueue.QueueName
+      Environment:
+        Variables:
+          WECOM_CORPID: !Ref WeComCorpId
+          WECOM_TOKEN: !Ref WeComToken
+          WECOM_ENCODING_AES_KEY: !Ref WeComEncodingAESKey
+          WECOM_CORPSECRET: !Ref WeComCorpSecret
+          WECOM_AGENTID: !Ref WeComAgentId
+          SQS_QUEUE_URL: !Ref WeComMessageQueue
+      Events:
+        GetVerify:
+          Type: Api
+          Properties:
+            Path: /wecom/callback
+            Method: get
+        PostMessage:
+          Type: Api
+          Properties:
+            Path: /wecom/callback
+            Method: post
+        GetVerifyKiroro:
+          Type: Api
+          Properties:
+            Path: /wecom/callback/kiroro
+            Method: get
+        PostMessageKiroro:
+          Type: Api
+          Properties:
+            Path: /wecom/callback/kiroro
+            Method: post
+
+  # ---- Worker Lambda (从SQS取消息，调Kiro API，发回复) ----
+  WeComWorkerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda_worker/
+      Handler: worker.lambda_handler
+      Timeout: 300
+      ReservedConcurrentExecutions: 5
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+        SubnetIds:
+          - !Ref PrivateSubnet
+      Policies:
+        - VPCAccessPolicy: {}
+      Environment:
+        Variables:
+          WECOM_CORPID: !Ref WeComCorpId
+          WECOM_CORPSECRET: !Ref WeComCorpSecret
+          WECOM_AGENTID: !Ref WeComAgentId
+      Events:
+        SQSTrigger:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt WeComMessageQueue.Arn
+            BatchSize: 1
+
+  # ---- DLQ 告警 ----
+  DLQAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: wecom-dlq-messages
+      AlarmDescription: WeCom DLQ has messages - worker processing failures
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt WeComDeadLetterQueue.QueueName
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+  # ---- 自定义域名 ----
+  ApiDomainName:
+    Type: AWS::ApiGateway::DomainName
+    Condition: HasCertificate
+    Properties:
+      DomainName: !Ref CustomDomainName
+      CertificateArn: !Ref CertificateArn
+      EndpointConfiguration:
+        Types:
+          - EDGE
+
+  ApiBasePathMapping:
+    Type: AWS::ApiGateway::BasePathMapping
+    Condition: HasCertificate
+    DependsOn:
+      - ServerlessRestApiProdStage
+    Properties:
+      DomainName: !Ref ApiDomainName
+      RestApiId: !Ref ServerlessRestApi
+      Stage: Prod
+
+Outputs:
+  CallbackApiUrl:
+    Description: API Gateway URL
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/wecom/callback"
+  CustomCallbackUrl:
+    Condition: HasCertificate
+    Description: 自定义域名回调 URL
+    Value: !Sub "https://${CustomDomainName}/wecom/callback"
+  ApiGatewayDomainTarget:
+    Condition: HasCertificate
+    Description: CNAME 目标
+    Value: !GetAtt ApiDomainName.DistributionDomainName
+  NatGatewayPublicIP:
+    Description: Lambda 固定出口 IP
+    Value: !Ref EIP
+  SQSQueueUrl:
+    Description: SQS 队列 URL
+    Value: !Ref WeComMessageQueue
+  DLQQueueUrl:
+    Description: 死信队列 URL
+    Value: !Ref WeComDeadLetterQueue
