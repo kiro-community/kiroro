@@ -9,11 +9,12 @@ Kiroro 是 [Kiro](https://kiro.dev) 的智能小助手 Bot，帮助用户解决 
 | 目录 | 平台 | 接入方式 | 部署方式 | 部署文档 |
 |------|------|----------|----------|----------|
 | [dingtalk/](dingtalk/) | 钉钉 | Stream (WebSocket 长连接) | AWS ECS Fargate (CDK) | [README](dingtalk/README.md) |
+| [feishu/](feishu/) | 飞书 | 长连接 (WebSocket) | Docker / ECS Fargate | [README](feishu/README.md) |
 | [wecom/](wecom/) | 企业微信 | HTTP 回调 + SQS 异步 | AWS Lambda (SAM) | [README](wecom/README.md) |
 
 ## 功能
 
-- 🤖 通过 IM 平台（钉钉、企业微信）直接与 Kiroro 对话
+- 🤖 通过 IM 平台（钉钉、飞书、企业微信）直接与 Kiroro 对话
 - 📚 内置 Kiro 知识库，精准回答使用问题
 - 💬 支持多轮对话，上下文连贯
 - 🔗 回复中附带相关文档链接和引用来源
@@ -59,12 +60,12 @@ Content-Type: application/json
 
 **各 Connector 实际配置**
 
-| 字段 | DingTalk | WeCom |
-|------|----------|-------|
-| `client_type` | `DingDing` | `WeCom` |
-| `channel` | `dingding` | `wecom` |
-| `session_id` | `dingding_{p2p\|group}_{convId}_{userId}` | `wecom_p2p_{corpId}_{userId}` |
-| `request_context.url` | `https://dingding.kiro.bot/?persona=kiro` | `https://wecom.kiro.bot/?strands=true&persona=kiro` |
+| 字段 | DingTalk | Feishu | WeCom |
+|------|----------|--------|-------|
+| `client_type` | `DingDing` | `Feishu` | `WeCom` |
+| `channel` | `dingding` | `feishu` | `wecom` |
+| `session_id` | `dingding_{p2p\|group}_{convId}_{userId}` | `feishu_{p2p\|group}_{chatId}_{userId}` | `wecom_p2p_{corpId}_{userId}` |
+| `request_context.url` | `https://dingding.kiro.bot/?persona=kiro` | `https://feishu.kiro.bot/?persona=kiro` | `https://wecom.kiro.bot/?strands=true&persona=kiro` |
 
 **session_id 规范**
 
@@ -91,6 +92,10 @@ kiroro/
 │   ├── connector.py           #   主程序 (Stream 模式)
 │   ├── Dockerfile
 │   └── infra/                 #   CDK 基础设施
+├── feishu/                    # 飞书 connector
+│   ├── connector.py           #   主程序 (长连接模式)
+│   ├── Dockerfile
+│   └── requirements.txt
 └── wecom/                     # 企业微信 connector
     ├── deploy/                #   SAM 部署 (Lambda + API GW + SQS + VPC)
     ├── common/                #   企微 SDK 库
