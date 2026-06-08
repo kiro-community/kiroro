@@ -21,7 +21,7 @@
 3. 添加「机器人」能力
 4. 事件订阅 → 接收方式选择「长连接」
 5. 添加事件：`im.message.receive_v1`（接收消息）
-6. 权限管理 → 开通：`im:message`（获取消息）、`im:message:send_as_bot`（发送消息）
+6. 权限管理 → 开通：`im:message`（获取消息）、`im:message:send_as_bot`（发送消息）、`im:message.p2p_msg:readonly`（读取用户发给机器人的消息）、`im:message.group_at_msg:readonly` （获取群组中用户@机器人消息）
 7. 版本管理 → 创建版本并发布
 8. 记录 App ID 和 App Secret
 
