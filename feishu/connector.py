@@ -18,6 +18,7 @@ import time
 import logging
 import argparse
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from http.server import HTTPServer, BaseHTTPRequestHandler
 
 import requests as http_requests
@@ -40,6 +41,9 @@ KIRO_TIMEOUT = int(os.environ.get("KIRO_TIMEOUT", "250"))
 HEALTH_PORT = int(os.environ.get("HEALTH_PORT", "8080"))
 
 logger = logging.getLogger("kiro-feishu")
+
+# 用于异步处理消息，避免阻塞 WebSocket 接收循环
+_executor = ThreadPoolExecutor(max_workers=10)
 
 # ─── Health Check ───
 _health_state = {
@@ -272,7 +276,9 @@ def main():
 
     # 创建 WebSocket 长连接客户端
     event_handler = lark.EventDispatcherHandler.builder("", "") \
-        .register_p2_im_message_receive_v1(lambda event: handle_message(client, _extract_event(event))) \
+        .register_p2_im_message_receive_v1(
+            lambda event: _executor.submit(handle_message, client, _extract_event(event))
+        ) \
         .build()
 
     ws_client = lark.ws.Client(
