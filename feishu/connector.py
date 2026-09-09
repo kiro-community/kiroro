@@ -227,10 +227,16 @@ def handle_message(client: lark.Client, event: dict):
 
 
 def reply_text(client: lark.Client, message_id: str, text: str):
-    """回复飞书消息"""
+    """使用 post 富文本类型回复飞书消息。"""
+    post_content = {
+        "zh_cn": {
+            "title": "",
+            "content": [[{"tag": "md", "text": text}]],
+        }
+    }
     body = ReplyMessageRequestBody.builder() \
-        .msg_type("text") \
-        .content(json.dumps({"text": text})) \
+        .msg_type("post") \
+        .content(json.dumps(post_content)) \
         .build()
     req = ReplyMessageRequest.builder() \
         .message_id(message_id) \
